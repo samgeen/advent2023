@@ -45,6 +45,7 @@ class DaySamAssets {
         sprites[this.park] = loadImage(this.imageFilename('park.png'));
         sprites[this.snowperson] = loadImage(this.imageFilename('snowperson.png'));
         this.monuments = [this.church,this.hospital,this.bar,this.decoratedtree,this.park,this.snowperson]
+        
         // Roads
         // To simplify checks later, make road tiles -ve
         this.leftroad = -1;
@@ -53,6 +54,11 @@ class DaySamAssets {
         sprites[this.leftroad] = loadImage(this.imageFilename('road_leftright.png'));
         sprites[this.uproad] = loadImage(this.imageFilename('road_updown.png'));
         sprites[this.crossroad] = loadImage(this.imageFilename('road_cross.png'));
+        
+        // Mobs
+        this.mobs = [2000];
+        sprites[2000] = loadImage(this.imageFilename('mob1.png'));
+
         this.sprites = sprites;
 
     }
@@ -106,6 +112,8 @@ class DayX extends Day {
         this.nextTickerDelay = 1000;
         this.maxTickerLifetime = 5000;
         this.tickerLifetime = this.maxTickerLifetime;
+        this.mobDelay = 3000;
+        this.nextMobDelay = 3000;
         this.tickerText = "";
         this.city = 0;
         this.loading = false;
@@ -198,8 +206,11 @@ class DayX extends Day {
             var maxAIDelay = 8000;
             var minTickerDelay = 7000;
             var maxTickerDelay = 10000;
+            var minMobDelay = 2000;
+            var maxMobDelay = 8000;
             this.aiDelay += deltaTime;
             this.tickerDelay += deltaTime;
+            this.mobDelay += deltaTime;
             if (this.aiDelay > this.nextAIDelay) {
                 this.city.stepAI();
                 this.aiDelay = 0;
@@ -211,6 +222,13 @@ class DayX extends Day {
                 this.tickerLifetime = this.maxTickerLifetime;
                 this.nextTickerDelay = (maxTickerDelay-minTickerDelay)*Math.random()+minTickerDelay;
             }
+            if (this.mobDelay > this.nextMobDelay) {
+                this.city.spawnMob();
+                this.mobDelay = 0;
+                this.nextMobDelay = (maxMobDelay-minMobDelay)*Math.random()+minMobDelay;
+            }
+            // Handle mobs
+            this.city.moveMobs();
             // Draw city
             this.city.draw();
         }
@@ -225,7 +243,7 @@ class DayX extends Day {
         rectMode(CENTER);
         var fsizesmall = 20;
         textSize(fsizesmall);
-        var textMusic = "Turn music on: M"
+        var textMusic = "Turn music on: M";
         if (this.assets.musicOn) {
             textMusic = "Turn music off: M";
         }
@@ -234,11 +252,11 @@ class DayX extends Day {
 
     drawui () {
         // Draw info
-        this.drawInfo()
+        this.drawInfo();
         // Draw news ticker
-        this.drawNewsTicker()
+        this.drawNewsTicker();
         // Draw city info
-        this.drawCityInfo()
+        this.drawCityInfo();
     }
 
     generateTickerText() {
@@ -354,7 +372,7 @@ class DayX extends Day {
     }
 
     mouseReleased() {
-
+        // No behaviour
     }
 
 
@@ -375,7 +393,7 @@ class DayX extends Day {
     }
 
     keyReleased() {
-
+        // No behaviour
     }
 
     City = class {
@@ -384,6 +402,8 @@ class DayX extends Day {
             this.day = day;
             this.assets = day.assets;
             this.map = new this.Map(this);
+            this.mobs = []
+            this.maxMobCount = 20;
             this.name = this.makeName()
             this.population = 0
         }
@@ -407,10 +427,104 @@ class DayX extends Day {
 
         draw() {
             this.map.draw();
+            for (var i = 0; i < this.mobs.length; i++) { 
+                this.mobs[i].draw();
+            }
         }
 
         stepAI() {
             this.map.placeSomething()
+        }
+
+        spawnMob() {
+            if (this.mobs.length >= this.maxMobCount)  {
+                console.log("Tried to spawn a mob but too many onscreen already");
+                return;
+            }
+            if (this.map.structureCount < 2)  {
+                console.log("Tried to spawn a mob but not enough structures onscreen");
+                return;
+            }
+            var mob = new this.Mob(this);
+            console.log("Made mob:", mob)
+            this.mobs.push(mob);
+        }
+
+        despawnMob(mob) {
+            const index = array.indexOf(mob);
+            if (index > -1) {
+                this.mobs.splice(index, 1);
+            }
+        }
+
+        moveMobs() {
+            for (var i = 0; i < this.mobs.length; i++) { 
+                this.mobs[i].move();
+            }
+        }
+
+        Mob = class {
+            constructor(city) {
+                this.city = city;
+                this.assets = city.assets;
+                this.map = city.map;
+                this.position = this.spawn();
+                // Grid cell size in screen units
+                this.gridw = width/this.map.nx;
+                this.gridh = height/this.map.ny;
+                // Sprite can be mostly empty but is size of grid tile to make things easy
+                this.imw = this.gridw;
+                this.imh = this.gridw;
+                this.waypoints = this.makeWaypoints();
+                this.sprite = this.assets.randomChoice(this.assets.mobs);
+            }
+
+            spawn() {
+                // Not enough structures
+                return this.map.randomStructure()
+            }
+
+            despawn() {
+                this.city.despawnMob(this);
+            }
+
+            makeWaypoints() {
+                // Set up
+                var destination = this.map.randomStructure(this.position);
+                var droadObj = this.map.distanceToRoad(this.position[0],this.position[1]);
+                var distanceToRoad = droadObj[0];
+                var nearestRoadToStart = droadObj[1];
+                var nearestRoadToEnd = null;
+                var distanceToTarget = this.map.distanceBetween(this.position,destination);
+                console.log("Making waypoints between:", this.position, destination)
+                if (distanceToTarget < distanceToRoad) {
+                    // Simplest case - target is nearer than a road so just two waypoints
+                    return [this.position,destination]
+                } else {
+                    nearestRoadToEnd = this.map.distanceToRoad(destination[0],destination[1])[1];
+                    // Less simple: find path along roads
+                    var roadPath = this.map.roadPathSearch(nearestRoadToStart,nearestRoadToEnd);
+                    var newpath = [];
+                    newpath.push(this.position);
+                    for (var ip = 0; ip < roadPath.length; ip++) {
+                        newpath.push(roadPath[ip]);
+                    }
+                    newpath.push(destination);
+                    console.log("New path:", newpath);
+                    return newpath;
+                }
+
+            }
+
+            move() {
+
+            }
+
+            draw() {
+                var x = this.position[0] * this.gridw;
+                var y = this.position[1] * this.gridh;
+                image(this.assets.sprite(this.sprite), x, y, this.imw, this.imh);
+            }
         }
 
         Map = class {
@@ -425,6 +539,7 @@ class DayX extends Day {
                 this.grid = [];
                 this.spriteCounter = {}
                 this.roadCount = 0;
+                this.structureCount = 0;
                 this.maxRoadFraction = 0.2;
                 this.roadRollChance = 1.0;
                 this.roadRollDecay = 0.3;
@@ -436,6 +551,8 @@ class DayX extends Day {
                 this.fullMap = false;
                 this.noRoads = true;
                 this.treeFraction = 0.05+Math.random() * 0.2;
+                // Used to search for random structures easily
+                this.structurePositions = []
                 // Make map
                 for (var ix = 0; ix < this.nx; ix++) { 
                     this.grid[ix] = [];
@@ -521,7 +638,9 @@ class DayX extends Day {
                     // Place structure
                     else {
                         // Cycle if no roads within 4 cells
-                        if (this.distanceToRoad(ix,iy) > 4) continue;
+                        // distanceToRoad also returns the position of the nearest road
+                        // but we don't need that here
+                        if (this.distanceToRoad(ix,iy)[0] > 4) continue;
                         placedSomething = this.placeStructure(ix, iy);
                     }
                     // Prevent bad loops, just exit if this happens
@@ -647,14 +766,36 @@ class DayX extends Day {
                     return false;
                 }
                 // Add sprite
-                this.spriteCounter[structure] += 1
+                this.spriteCounter[structure] += 1;
+                this.structureCount += 1;
                 this.grid[pix][piy] = structure;
+                this.structurePositions.push([pix,piy]);
                 // Now make it more likely to make a road
                 this.roadRollChance *= this.roadRollIncrease;
                 this.roadRollChance = Math.min(1.0,this.roadRollChance);
                 // Add city population
-                this.city.population += int(Math.random()*4)+1
+                this.city.population += int(Math.random()*4)+1;
                 return true;
+
+            }
+
+            randomStructure(notThisOne=null) {
+                // Error state if no structures
+                if (this.structureCount == 0) {
+                    return [-1,-1]; 
+                }
+                // Return a random structure
+                var choice = this.assets.randomChoice(this.structurePositions);
+                if (!notThisOne) {
+                    return choice;
+                } else {
+                    // Make sure the choice isn't notThisOne
+                    // Used to make sure a destination isn't the current position
+                    while (choice == notThisOne) {
+                        choice = this.assets.randomChoice(this.structurePositions);
+                    }
+                }
+                return choice;
 
             }
 
@@ -687,39 +828,540 @@ class DayX extends Day {
                 var distance = 10000;
                 // Use NYC distance (dx + dy)
                 var b = this.border;
+                var closestRoad = null;
+                var newdist = 0;
                 for (var ix = b; ix < this.nx-b; ix++) { 
                     for (var iy = b; iy < this.ny-b; iy++) {
                         if (this.isRoad(ix,iy)) {
-                            distance = Math.min(Math.abs(pix-ix)+Math.abs(piy-iy),distance);
+                            newdist = Math.abs(pix-ix)+Math.abs(piy-iy)
+                            if (newdist < distance) {
+                                distance = newdist;
+                                closestRoad = [ix,iy]
+                            }
                         }
                     }
                 }
-                return distance;
+                return [distance,closestRoad];
             }
 
             distanceToStructure(pix, piy, spriteID) {
                 var distance = 10000;
-                // Use NYC distance (dx + dy)
                 var b = this.border;
                 for (var ix = b; ix < this.nx-b; ix++) { 
                     for (var iy = b; iy < this.ny-b; iy++) {
                         if (this.grid[ix][iy] == spriteID) {
+                            // SHOULD DO THE SAME AS BELOW, KEPT TO AVOID TOO MUCH INDIRECTION
                             distance = Math.min(Math.abs(pix-ix)+Math.abs(piy-iy),distance);
                         }
                     }
                 }
                 return distance;
             }
+
+            distanceBetween(pointA,pointB) {
+                // Calculate NYC distance (dx + dy)
+                return Math.abs(pointA[0]-pointB[0])+Math.abs(pointA[1]-pointB[1])
+            }
+
+            isSamePoint(pointA,pointB) {
+                // Calculate NYC distance (dx + dy)
+                return (pointA[0] == pointB[0]) && (pointA[1] == pointB[1])
+            }
+
+            findNodesInRoads(start,end) {
+                // Find nodes in roads in Cartesian axes
+                console.log("STARTEND", start, end)
+                var startx = start[0];
+                var starty = start[1];
+                var nodes = []
+                var crossroad = this.assets.crossroad;
+
+                // Search x axis
+                var b = this.border;
+                for (var ix = b; ix < this.nx-b; ix++) { 
+                    // Just go to end
+                    if (end[0] == ix && end[1] == starty) {
+                        nodes = [end];
+                        return nodes;
+                    }
+                    // Find all nodes in the row
+                    if (this.grid[ix][starty] == crossroad) {
+                        nodes.push([ix,starty]);
+                    }
+                }
+                // Search y axis
+                for (var iy = b; iy < this.ny-b; iy++) {
+                    // Just go to end
+                    if (end[0] == startx && end[1] == iy) {
+                        nodes = [end];
+                        return nodes;
+                    }
+                    // Find all nodes in the column
+                    if (this.grid[startx][iy] == crossroad) {
+                        nodes.push([startx,iy]);
+                    }
+                }
+                return nodes;
+
+            }
+
+            copyPath(path) {
+                var newpath = []
+                for (var i = 0; i < path.length; i++) {
+                    newpath.push(path[i]);
+                }
+                return newpath;
+            }
+                
+            roadPathSearch(start,end) {
+                // Loop over paths
+                var path = null;
+                var nodes = null;
+                var paths = [[start]];
+                var newpath = null;
+                var newpaths = [];
+                var MAXRECURSIONS = 100;
+                for (var irecursion = 0; irecursion < MAXRECURSIONS; irecursion++) {
+                    for (var ip = 0; ip < paths.length; ip++) { 
+                        path = paths[ip];
+                        // Check if we're done already
+                        if (this.isSamePoint(path.at(-1),end)) {
+                            return path;
+                        }
+                        // Fill in new nodes to make new paths
+                        nodes = this.findNodesInRoads(path[path.length-1],end);
+                        for (var i = 0; i < nodes.length; i++) { 
+                            // Don't make backtracking paths
+                            if (!path.includes(nodes[i])) {
+                                newpath = this.copyPath(path);
+                                newpath.push(nodes[i]);
+                                // Check if we're done
+                                if (this.isSamePoint(newpath.at(-1),end)) {
+                                    return newpath;
+                                }
+                                newpaths.push(newpath) 
+                            }
+                        }
+
+                    }
+                    // Set up next recursion
+                    paths = newpaths;
+                }
+                // If we reach here, the recursions have failed to find a path
+                console.log("Failed to find path in roadPathSearch");
+                return false;
+            }
         }
+
+        // COPYPASTA A STAR ALGORITHM
+        // javascript-astar 0.4.1
+        // http://github.com/bgrins/javascript-astar
+        // Freely distributable under the MIT License.
+        // Implements the astar search algorithm in javascript using a Binary Heap.
+        // Includes Binary Heap (with modifications) from Marijn Haverbeke.
+        // http://eloquentjavascript.net/appendix2.html
+    //     (function(definition) {
+    //         /* global module, define */
+    //         if (typeof module === 'object' && typeof module.exports === 'object') {
+    //             module.exports = definition();
+    //         } else if (typeof define === 'function' && define.amd) {
+    //             define([], definition);
+    //         } else {
+    //             var exports = definition();
+    //             window.astar = exports.astar;
+    //             window.Graph = exports.Graph;
+    //         }
+    //         })(function() {
+        
+    //         function pathTo(node) {
+    //         var curr = node;
+    //         var path = [];
+    //         while (curr.parent) {
+    //             path.unshift(curr);
+    //             curr = curr.parent;
+    //         }
+    //         return path;
+    //         }
+        
+    //         function getHeap() {
+    //         return new BinaryHeap(function(node) {
+    //             return node.f;
+    //         });
+    //     }
+    
+    //     var astar = {
+    //     /**
+    //     * Perform an A* Search on a graph given a start and end node.
+    //     * @param {Graph} graph
+    //     * @param {GridNode} start
+    //     * @param {GridNode} end
+    //     * @param {Object} [options]
+    //     * @param {bool} [options.closest] Specifies whether to return the
+    //                 path to the closest node if the target is unreachable.
+    //     * @param {Function} [options.heuristic] Heuristic function (see
+    //     *          astar.heuristics).
+    //     */
+    //     search: function(graph, start, end, options) {
+    //         graph.cleanDirty();
+    //         options = options || {};
+    //         var heuristic = options.heuristic || astar.heuristics.manhattan;
+    //         var closest = options.closest || false;
+    
+    //         var openHeap = getHeap();
+    //         var closestNode = start; // set the start node to be the closest if required
+    
+    //         start.h = heuristic(start, end);
+    //         graph.markDirty(start);
+    
+    //         openHeap.push(start);
+    
+    //         while (openHeap.size() > 0) {
+    
+    //         // Grab the lowest f(x) to process next.  Heap keeps this sorted for us.
+    //         var currentNode = openHeap.pop();
+    
+    //         // End case -- result has been found, return the traced path.
+    //         if (currentNode === end) {
+    //             return pathTo(currentNode);
+    //         }
+    
+    //         // Normal case -- move currentNode from open to closed, process each of its neighbors.
+    //         currentNode.closed = true;
+    
+    //         // Find all neighbors for the current node.
+    //         var neighbors = graph.neighbors(currentNode);
+    
+    //         for (var i = 0, il = neighbors.length; i < il; ++i) {
+    //             var neighbor = neighbors[i];
+    
+    //             if (neighbor.closed || neighbor.isWall()) {
+    //             // Not a valid node to process, skip to next neighbor.
+    //             continue;
+    //             }
+    
+    //             // The g score is the shortest distance from start to current node.
+    //             // We need to check if the path we have arrived at this neighbor is the shortest one we have seen yet.
+    //             var gScore = currentNode.g + neighbor.getCost(currentNode);
+    //             var beenVisited = neighbor.visited;
+    
+    //             if (!beenVisited || gScore < neighbor.g) {
+    
+    //             // Found an optimal (so far) path to this node.  Take score for node to see how good it is.
+    //             neighbor.visited = true;
+    //             neighbor.parent = currentNode;
+    //             neighbor.h = neighbor.h || heuristic(neighbor, end);
+    //             neighbor.g = gScore;
+    //             neighbor.f = neighbor.g + neighbor.h;
+    //             graph.markDirty(neighbor);
+    //             if (closest) {
+    //                 // If the neighbour is closer than the current closestNode or if it's equally close but has
+    //                 // a cheaper path than the current closest node then it becomes the closest node
+    //                 if (neighbor.h < closestNode.h || (neighbor.h === closestNode.h && neighbor.g < closestNode.g)) {
+    //                 closestNode = neighbor;
+    //                 }
+    //             }
+    
+    //             if (!beenVisited) {
+    //                 // Pushing to heap will put it in proper place based on the 'f' value.
+    //                 openHeap.push(neighbor);
+    //             } else {
+    //                 // Already seen the node, but since it has been rescored we need to reorder it in the heap
+    //                 openHeap.rescoreElement(neighbor);
+    //             }
+    //             }
+    //         }
+    //         }
+    
+    //         if (closest) {
+    //         return pathTo(closestNode);
+    //         }
+    
+    //         // No result was found - empty array signifies failure to find path.
+    //         return [];
+    //     },
+    //     // See list of heuristics: http://theory.stanford.edu/~amitp/GameProgramming/Heuristics.html
+    //     heuristics: {
+    //         manhattan: function(pos0, pos1) {
+    //         var d1 = Math.abs(pos1.x - pos0.x);
+    //         var d2 = Math.abs(pos1.y - pos0.y);
+    //         return d1 + d2;
+    //         },
+    //         diagonal: function(pos0, pos1) {
+    //         var D = 1;
+    //         var D2 = Math.sqrt(2);
+    //         var d1 = Math.abs(pos1.x - pos0.x);
+    //         var d2 = Math.abs(pos1.y - pos0.y);
+    //         return (D * (d1 + d2)) + ((D2 - (2 * D)) * Math.min(d1, d2));
+    //         }
+    //     },
+    //     cleanNode: function(node) {
+    //         node.f = 0;
+    //         node.g = 0;
+    //         node.h = 0;
+    //         node.visited = false;
+    //         node.closed = false;
+    //         node.parent = null;
+    //     }
+    //     };
+    
+    //     /**
+    //      * A graph memory structure
+    //      * @param {Array} gridIn 2D array of input weights
+    //      * @param {Object} [options]
+    //      * @param {bool} [options.diagonal] Specifies whether diagonal moves are allowed
+    //      */
+    //     function Graph(gridIn, options) {
+    //     options = options || {};
+    //     this.nodes = [];
+    //     this.diagonal = !!options.diagonal;
+    //     this.grid = [];
+    //     for (var x = 0; x < gridIn.length; x++) {
+    //         this.grid[x] = [];
+    
+    //         for (var y = 0, row = gridIn[x]; y < row.length; y++) {
+    //         var node = new GridNode(x, y, row[y]);
+    //         this.grid[x][y] = node;
+    //         this.nodes.push(node);
+    //         }
+    //     }
+    //     this.init();
+    //     }
+    
+    //     Graph.prototype.init = function() {
+    //     this.dirtyNodes = [];
+    //     for (var i = 0; i < this.nodes.length; i++) {
+    //         astar.cleanNode(this.nodes[i]);
+    //     }
+    //     };
+    
+    //     Graph.prototype.cleanDirty = function() {
+    //     for (var i = 0; i < this.dirtyNodes.length; i++) {
+    //         astar.cleanNode(this.dirtyNodes[i]);
+    //     }
+    //     this.dirtyNodes = [];
+    //     };
+    
+    //     Graph.prototype.markDirty = function(node) {
+    //     this.dirtyNodes.push(node);
+    //     };
+    
+    //     Graph.prototype.neighbors = function(node) {
+    //     var ret = [];
+    //     var x = node.x;
+    //     var y = node.y;
+    //     var grid = this.grid;
+    
+    //     // West
+    //     if (grid[x - 1] && grid[x - 1][y]) {
+    //         ret.push(grid[x - 1][y]);
+    //     }
+    
+    //     // East
+    //     if (grid[x + 1] && grid[x + 1][y]) {
+    //         ret.push(grid[x + 1][y]);
+    //     }
+    
+    //     // South
+    //     if (grid[x] && grid[x][y - 1]) {
+    //         ret.push(grid[x][y - 1]);
+    //     }
+    
+    //     // North
+    //     if (grid[x] && grid[x][y + 1]) {
+    //         ret.push(grid[x][y + 1]);
+    //     }
+    
+    //     if (this.diagonal) {
+    //         // Southwest
+    //         if (grid[x - 1] && grid[x - 1][y - 1]) {
+    //         ret.push(grid[x - 1][y - 1]);
+    //         }
+    
+    //         // Southeast
+    //         if (grid[x + 1] && grid[x + 1][y - 1]) {
+    //         ret.push(grid[x + 1][y - 1]);
+    //         }
+    
+    //         // Northwest
+    //         if (grid[x - 1] && grid[x - 1][y + 1]) {
+    //         ret.push(grid[x - 1][y + 1]);
+    //         }
+    
+    //         // Northeast
+    //         if (grid[x + 1] && grid[x + 1][y + 1]) {
+    //         ret.push(grid[x + 1][y + 1]);
+    //         }
+    //     }
+    
+    //     return ret;
+    //     };
+    
+    //     Graph.prototype.toString = function() {
+    //     var graphString = [];
+    //     var nodes = this.grid;
+    //     for (var x = 0; x < nodes.length; x++) {
+    //         var rowDebug = [];
+    //         var row = nodes[x];
+    //         for (var y = 0; y < row.length; y++) {
+    //         rowDebug.push(row[y].weight);
+    //         }
+    //         graphString.push(rowDebug.join(" "));
+    //     }
+    //     return graphString.join("\n");
+    //     };
+    
+    //     function GridNode(x, y, weight) {
+    //     this.x = x;
+    //     this.y = y;
+    //     this.weight = weight;
+    //     }
+    
+    //     GridNode.prototype.toString = function() {
+    //     return "[" + this.x + " " + this.y + "]";
+    //     };
+    
+    //     GridNode.prototype.getCost = function(fromNeighbor) {
+    //     // Take diagonal weight into consideration.
+    //     if (fromNeighbor && fromNeighbor.x != this.x && fromNeighbor.y != this.y) {
+    //         return this.weight * 1.41421;
+    //     }
+    //     return this.weight;
+    //     };
+    
+    //     GridNode.prototype.isWall = function() {
+    //     return this.weight === 0;
+    //     };
+    
+    //     function BinaryHeap(scoreFunction) {
+    //     this.content = [];
+    //     this.scoreFunction = scoreFunction;
+    //     }
+    
+    //     BinaryHeap.prototype = {
+    //     push: function(element) {
+    //         // Add the new element to the end of the array.
+    //         this.content.push(element);
+    
+    //         // Allow it to sink down.
+    //         this.sinkDown(this.content.length - 1);
+    //     },
+    //     pop: function() {
+    //         // Store the first element so we can return it later.
+    //         var result = this.content[0];
+    //         // Get the element at the end of the array.
+    //         var end = this.content.pop();
+    //         // If there are any elements left, put the end element at the
+    //         // start, and let it bubble up.
+    //         if (this.content.length > 0) {
+    //         this.content[0] = end;
+    //         this.bubbleUp(0);
+    //         }
+    //         return result;
+    //     },
+    //     remove: function(node) {
+    //         var i = this.content.indexOf(node);
+    
+    //         // When it is found, the process seen in 'pop' is repeated
+    //         // to fill up the hole.
+    //         var end = this.content.pop();
+    
+    //         if (i !== this.content.length - 1) {
+    //         this.content[i] = end;
+    
+    //         if (this.scoreFunction(end) < this.scoreFunction(node)) {
+    //             this.sinkDown(i);
+    //         } else {
+    //             this.bubbleUp(i);
+    //         }
+    //         }
+    //     },
+    //     size: function() {
+    //         return this.content.length;
+    //     },
+    //     rescoreElement: function(node) {
+    //         this.sinkDown(this.content.indexOf(node));
+    //     },
+    //     sinkDown: function(n) {
+    //         // Fetch the element that has to be sunk.
+    //         var element = this.content[n];
+    
+    //         // When at 0, an element can not sink any further.
+    //         while (n > 0) {
+    
+    //         // Compute the parent element's index, and fetch it.
+    //         var parentN = ((n + 1) >> 1) - 1;
+    //         var parent = this.content[parentN];
+    //         // Swap the elements if the parent is greater.
+    //         if (this.scoreFunction(element) < this.scoreFunction(parent)) {
+    //             this.content[parentN] = element;
+    //             this.content[n] = parent;
+    //             // Update 'n' to continue at the new position.
+    //             n = parentN;
+    //         }
+    //         // Found a parent that is less, no need to sink any further.
+    //         else {
+    //             break;
+    //         }
+    //         }
+    //     },
+    //     bubbleUp: function(n) {
+    //         // Look up the target element and its score.
+    //         var length = this.content.length;
+    //         var element = this.content[n];
+    //         var elemScore = this.scoreFunction(element);
+    
+    //         while (true) {
+    //         // Compute the indices of the child elements.
+    //         var child2N = (n + 1) << 1;
+    //         var child1N = child2N - 1;
+    //         // This is used to store the new position of the element, if any.
+    //         var swap = null;
+    //         var child1Score;
+    //         // If the first child exists (is inside the array)...
+    //         if (child1N < length) {
+    //             // Look it up and compute its score.
+    //             var child1 = this.content[child1N];
+    //             child1Score = this.scoreFunction(child1);
+    
+    //             // If the score is less than our element's, we need to swap.
+    //             if (child1Score < elemScore) {
+    //             swap = child1N;
+    //             }
+    //         }
+    
+    //         // Do the same checks for the other child.
+    //         if (child2N < length) {
+    //             var child2 = this.content[child2N];
+    //             var child2Score = this.scoreFunction(child2);
+    //             if (child2Score < (swap === null ? elemScore : child1Score)) {
+    //             swap = child2N;
+    //             }
+    //         }
+    
+    //         // If the element needs to be moved, swap it, and continue.
+    //         if (swap !== null) {
+    //             this.content[n] = this.content[swap];
+    //             this.content[swap] = element;
+    //             n = swap;
+    //         }
+    //         // Otherwise, we are done.
+    //         else {
+    //             break;
+    //         }
+    //         }
+    //     }
+    //     };
+    
+    //     return {
+    //     astar: astar,
+    //     Graph: Graph
+    //     };
+    
+    //     });
 
     }
 
-    // Below is the basic setup for a nested class. This can be deleted or renamed
 
-    HelperClass = class {
-
-        constructor() {
-
-        }
-    }
 }
+
+
