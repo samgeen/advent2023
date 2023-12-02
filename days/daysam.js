@@ -56,8 +56,12 @@ class DaySamAssets {
         sprites[this.crossroad] = loadImage(this.imageFilename('road_cross.png'));
         
         // Mobs
-        this.mobs = [2000];
+        this.mobs = [2000,2001,2002,2003,2004];
         sprites[2000] = loadImage(this.imageFilename('mob1.png'));
+        sprites[2001] = loadImage(this.imageFilename('mob2.png'));
+        sprites[2002] = loadImage(this.imageFilename('mob3.png'));
+        sprites[2003] = loadImage(this.imageFilename('mob4.png'));
+        sprites[2004] = loadImage(this.imageFilename('mob5.png'));
 
         this.sprites = sprites;
 
@@ -297,7 +301,10 @@ class DayX extends Day {
                     "New craze: skiing uphill. Local skiier Henk Korn: 'Screw you, gravity!'",
                     "Local yetis report finding it hard to chase skiiers due to poor exercise levels",
                     "Local residents complain that they burned their marshmallows on the fire",
-                    "Local snowperson committee calls for tax freeze"];
+                    "Local snowperson committee calls for tax freeze",
+                    "Boo, Mayor, Boo! - some citizens, probably",
+                    "76% of citizens say 'Ho ho ho' - Mayor's office unavailable for comment",
+                    "Yay, Mayor, Yay! - all the citizens :)"];
         var firstNames = ["Councillor","Councillor","Councillor",
                       "Bork","Krampus","Hehe","Gronulsluk","Hilde","Wimpsifer","Harnald","Golb","Tilbert",
                       "Yarnis","Pilgou","Tripp","Horkhork","Wisper","Tramine","Colbit","Dilken"];
@@ -311,7 +318,7 @@ class DayX extends Day {
                                 "Thanks for the new nuclear plant! Makes me feel all toasty",
                                 "I was kicked really hard by a reindeer :( #publichealthcare",
                                 "The price of carrots is too high! Where am I going to find a nose?",
-                                "My Christmas tree caught fire :( Thanks fire service :)",
+                                "My tree caught fire :( Thanks fire service :)",
                                 "Come check out my snowman! Mayor! Come check it out!",
                                 "You have won a million lollipops! Click here to claim",
                                 "Thanks for the cycle-friendly infrastructure, mayor! NOT",
@@ -319,7 +326,7 @@ class DayX extends Day {
                                 "My sibling is visiting town - can they crash at the Mayor's House for a bit?",
                                 "Wow! The lights are amazing! Thanks, Mayor!",
                                 "I broke the ice for the ducks - they seem to be having fun now",
-                                "Singing Christmas songs to the old folks until they chase me out",
+                                "Singing holiday songs to the old folks until they chase me out",
                                 "Oh wassail oh wassail all over the town, the roads they are pink and the reindeer poop's brown",
                                 "Old man was stuck on my roof - says his sleigh went off without him",
                                 "Thanks for the new tree, Mayor! Looks fancy in the town square",
@@ -333,7 +340,9 @@ class DayX extends Day {
                                 "Look at the stars! Look how they shine on you. Their colour is set by surface temperature.",
                                 "Gonna get some oilballs from the oilball stand, delicious",
                                 "Oh so you fireproof the big goat? Huh? You fireproof the big goat?? Well good for you.",
-                                "Real candles on the tree or get out. No compromise."];
+                                "Real candles on the tree or get out. No compromise.",
+                                "Aww, your dog is adorable! Can I pet them?",
+                                "Hey I found the winter dragon and its egg is hatching, what's the number for the vet?"];
         var text = ""
         if (choice < 0.5) {
             text = "Newsflash: "
