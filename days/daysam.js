@@ -45,6 +45,7 @@ class DaySamAssets {
         sprites[this.park] = loadImage(this.imageFilename('park.png'));
         sprites[this.snowperson] = loadImage(this.imageFilename('snowperson.png'));
         this.monuments = [this.church,this.hospital,this.bar,this.decoratedtree,this.park,this.snowperson]
+        
         // Roads
         // To simplify checks later, make road tiles -ve
         this.leftroad = -1;
@@ -53,6 +54,11 @@ class DaySamAssets {
         sprites[this.leftroad] = loadImage(this.imageFilename('road_leftright.png'));
         sprites[this.uproad] = loadImage(this.imageFilename('road_updown.png'));
         sprites[this.crossroad] = loadImage(this.imageFilename('road_cross.png'));
+        
+        // Mobs
+        this.mobs = [2000];
+        sprites[2000] = loadImage(this.imageFilename('mob1.png'));
+
         this.sprites = sprites;
 
     }
@@ -106,12 +112,14 @@ class DayX extends Day {
         this.nextTickerDelay = 1000;
         this.maxTickerLifetime = 5000;
         this.tickerLifetime = this.maxTickerLifetime;
+        this.mobDelay = 3000;
+        this.nextMobDelay = 3000;
         this.tickerText = "";
         this.city = 0;
         this.loading = false;
         this.loadingReady = false;
         // Set to false to run with launcher and music
-        this.DEBUG = true;
+        this.DEBUG = false;
     }
 
     cleanup () {
@@ -198,8 +206,11 @@ class DayX extends Day {
             var maxAIDelay = 8000;
             var minTickerDelay = 7000;
             var maxTickerDelay = 10000;
+            var minMobDelay = 2000;
+            var maxMobDelay = 8000;
             this.aiDelay += deltaTime;
             this.tickerDelay += deltaTime;
+            this.mobDelay += deltaTime;
             if (this.aiDelay > this.nextAIDelay) {
                 this.city.stepAI();
                 this.aiDelay = 0;
@@ -211,11 +222,20 @@ class DayX extends Day {
                 this.tickerLifetime = this.maxTickerLifetime;
                 this.nextTickerDelay = (maxTickerDelay-minTickerDelay)*Math.random()+minTickerDelay;
             }
+            if (this.mobDelay > this.nextMobDelay) {
+                this.city.spawnMob();
+                this.mobDelay = 0;
+                this.nextMobDelay = (maxMobDelay-minMobDelay)*Math.random()+minMobDelay;
+            }
+            // Handle mobs
+            this.city.moveMobs();
             // Draw city
             this.city.draw();
+            // Draw game UI
+            this.drawGameUI()
         }
-        // Draw UI
-        this.drawui();
+        // Draw UI for all scenes
+        this.drawAllUI();
     }
 
     drawInfo() {
@@ -225,20 +245,23 @@ class DayX extends Day {
         rectMode(CENTER);
         var fsizesmall = 20;
         textSize(fsizesmall);
-        var textMusic = "Turn music on: M"
+        var textMusic = "Turn music on: M";
         if (this.assets.musicOn) {
             textMusic = "Turn music off: M";
         }
         text(textMusic, 10,10);
     }
 
-    drawui () {
+    drawAllUI () {
         // Draw info
-        this.drawInfo()
+        this.drawInfo();
+    }
+
+    drawGameUI () {
         // Draw news ticker
-        this.drawNewsTicker()
+        this.drawNewsTicker();
         // Draw city info
-        this.drawCityInfo()
+        this.drawCityInfo();
     }
 
     generateTickerText() {
@@ -268,7 +291,13 @@ class DayX extends Day {
                     "Ugly jumper escapes zoo; citizens concerned",
                     "Nakatomi Plaza under siege third for time this month",
                     "Paddling pool freezes over: 'I was stuck there for hours'",
-                    "New winter trend: having a nice time in the snow"];
+                    "New winter trend: having a nice time in the snow",
+                    "Scientists discover chemicals in local water that make frogs cute",
+                    "Local councillor Gorp Jolkins declares 'Gorpmania', hopes to sweep polls",
+                    "New craze: skiing uphill. Local skiier Henk Korn: 'Screw you, gravity!'",
+                    "Local yetis report finding it hard to chase skiiers due to poor exercise levels",
+                    "Local residents complain that they burned their marshmallows on the fire",
+                    "Local snowperson committee calls for tax freeze"];
         var firstNames = ["Councillor","Councillor","Councillor",
                       "Bork","Krampus","Hehe","Gronulsluk","Hilde","Wimpsifer","Harnald","Golb","Tilbert",
                       "Yarnis","Pilgou","Tripp","Horkhork","Wisper","Tramine","Colbit","Dilken"];
@@ -294,7 +323,17 @@ class DayX extends Day {
                                 "Oh wassail oh wassail all over the town, the roads they are pink and the reindeer poop's brown",
                                 "Old man was stuck on my roof - says his sleigh went off without him",
                                 "Thanks for the new tree, Mayor! Looks fancy in the town square",
-                                "You know what pastry tastes the freshest? Mints pies! I said, mints pies! MINTS P-"];
+                                "You know what pastry tastes the freshest? Mints pies! I said, mints pies! MINTS P-",
+                                "Robins are eating all the squirrel seed! The mayor must do something",
+                                "All this reindeer poop is making my commute a mess! Ugh",
+                                "I preferred it when this app was called Quacker. Fix it!",
+                                "Ugh, another high-rise snowperson blocking the view from my house. Stop this nonsense!",
+                                "Help! Santa's sleigh is coming right for me! It's about to-",
+                                "This jumper is suuuper ugly. Ugh. I must have it.",
+                                "Look at the stars! Look how they shine on you. Their colour is set by surface temperature.",
+                                "Gonna get some oilballs from the oilball stand, delicious",
+                                "Oh so you fireproof the big goat? Huh? You fireproof the big goat?? Well good for you.",
+                                "Real candles on the tree or get out. No compromise."];
         var text = ""
         if (choice < 0.5) {
             text = "Newsflash: "
@@ -354,7 +393,7 @@ class DayX extends Day {
     }
 
     mouseReleased() {
-
+        // No behaviour
     }
 
 
@@ -375,7 +414,7 @@ class DayX extends Day {
     }
 
     keyReleased() {
-
+        // No behaviour
     }
 
     City = class {
@@ -384,6 +423,8 @@ class DayX extends Day {
             this.day = day;
             this.assets = day.assets;
             this.map = new this.Map(this);
+            this.mobs = []
+            this.maxMobCount = 20;
             this.name = this.makeName()
             this.population = 0
         }
@@ -406,11 +447,177 @@ class DayX extends Day {
         }
 
         draw() {
-            this.map.draw();
+            // Simple z-ordering, just draw mobs behind structures but on top of the ground
+            this.map.drawGround();
+            for (var i = 0; i < this.mobs.length; i++) { 
+                this.mobs[i].draw();
+            }
+            this.map.drawStructures();
         }
 
         stepAI() {
             this.map.placeSomething()
+        }
+
+        spawnMob() {
+            if (this.mobs.length >= this.maxMobCount)  {
+                console.log("Tried to spawn a mob but too many onscreen already");
+                return;
+            }
+            if (this.map.structureCount < 2)  {
+                console.log("Tried to spawn a mob but not enough structures onscreen");
+                return;
+            }
+            var mob = new this.Mob(this);
+            console.log("Made mob:", mob)
+            this.mobs.push(mob);
+        }
+
+        despawnMob(mob) {
+            const index = this.mobs.indexOf(mob);
+            if (index > -1) {
+                this.mobs.splice(index, 1);
+            }
+        }
+
+        moveMobs() {
+            for (var i = 0; i < this.mobs.length; i++) { 
+                this.mobs[i].move();
+            }
+        }
+
+        Mob = class {
+            constructor(city) {
+                this.city = city;
+                this.day = city.day;
+                this.assets = city.assets;
+                this.map = city.map;
+                this.position = this.spawn();
+                // Grid cell size in screen units
+                this.gridw = width/this.map.nx;
+                this.gridh = height/this.map.ny;
+                // Sprite can be mostly empty but is size of grid tile to make things easy
+                this.imw = this.gridw;
+                this.imh = this.gridw;
+                this.waypoints = this.makeWaypoints();
+                this.waypoint = 0;
+                this.waypointProgress = 0.0;
+                this.pathLength = 0;
+                this.speed = 0.1 + 0.2*Math.random();
+                this.sprite = this.assets.randomChoice(this.assets.mobs);
+            }
+
+            spawn() {
+                console.log("Spawned mob")
+                return this.map.randomStructure()
+            }
+
+            despawn() {
+                console.log("Despawned mob")
+                this.city.despawnMob(this);
+            }
+
+            makeWaypoints() {
+                // Makes waypoints in screen space, converting from grid space
+                // Also add some noise to make things more interesting
+                var path = this.makeGridPath() 
+                var waypoints = []
+                var g = this.gridw;
+                var x = 0;
+                var y = 0;
+                waypoints.push([(path[0][0]+0.5)*g,(path[0][1]+0.5)*g]);
+                for (var i = 0; i < path.length-1; i++) {  
+                    x = g*(path[i][0] + 0.25 + 0.5*Math.random());
+                    y = g*(path[i][1] + 0.25 + 0.5*Math.random());
+                    waypoints.push([x,y]);
+                }
+                waypoints.push([(path[path.length-1][0]+0.5)*g,(path[path.length-1][1]+0.5)*g]);
+                this.position = waypoints[0];
+                return waypoints;
+            }
+
+            makeGridPath() {
+                // Make a path on the grid itself
+                // Set up
+                var destination = this.map.randomStructure(this.position);
+                var droadObj = this.map.distanceToRoad(this.position[0],this.position[1]);
+                var distanceToRoad = droadObj[0];
+                var nearestRoadToStart = droadObj[1];
+                var nearestRoadToEnd = null;
+                var distanceToTarget = this.map.distanceBetween(this.position,destination);
+                console.log("Making waypoints between:", this.position, destination)
+                if (distanceToTarget < distanceToRoad) {
+                    // Simplest case - target is nearer than a road so just two waypoints
+                    return [this.position,destination]
+                } else {
+                    nearestRoadToEnd = this.map.distanceToRoad(destination[0],destination[1])[1];
+                    // Less simple: find path along roads
+                    var roadPath = this.map.roadPathSearch(nearestRoadToStart,nearestRoadToEnd);
+                    var newpath = [];
+                    newpath.push(this.position);
+                    for (var ip = 0; ip < roadPath.length; ip++) {
+                        newpath.push(roadPath[ip]);
+                    }
+                    newpath.push(destination);
+                    console.log("New path:", newpath);
+                    return newpath;
+                }
+
+            }
+
+            euclidDistance(pointA,pointB) {
+                // Distinguishes from the NYC distance used elsewhere
+                return Math.sqrt((pointA[0]-pointB[0])**2 + (pointA[1]-pointB[1])**2);
+            }
+
+            move() {
+                // Move the mob along a path
+                // Relevant parameters
+                // this.waypoints
+                // this.waypoint
+                // this.waypointProgress
+                // this.speed
+                var currposwp = this.waypoints[this.waypoint];
+                var nextposwp = this.waypoints[this.waypoint+1];
+                // Need to recalculate the path length to the next waypoint?
+                if (this.pathLength == 0) {
+                    this.pathlength = this.euclidDistance(currposwp,nextposwp);
+                }
+                // Get fractional progress along path
+                this.waypointProgress += this.speed*0.001*deltaTime/this.pathlength;
+                // Are we at the next waypoint?
+                if (this.waypointProgress >= 1.0) {
+                    // Don't bother cycling, just set to next waypoint
+                    this.waypointProgress = 0.0;
+                    this.waypoint += 1;
+                    this.position = nextposwp;
+                    this.pathLength = 0;
+                } else {
+                    // Calculate position as fractional progress along path
+                    this.position[0] = currposwp[0] + (nextposwp[0] - currposwp[0])*this.waypointProgress;
+                    this.position[1] = currposwp[1] + (nextposwp[1] - currposwp[1])*this.waypointProgress;
+                }
+                // Check for last waypoint
+                if (this.waypoint == (this.waypoints.length-1)) {
+                    this.despawn()
+                }
+            }
+
+            draw() {
+                if (this.day.DEBUG) {
+                    var w = this.waypoints;
+                    // If debug, display mob paths       
+                    for (var i = 0; i < w.length-1; i++) {  
+                        line(w[i][0],w[i][1],
+                            w[i+1][0],w[i+1][1]);
+                    }
+                }
+                // Draw mob
+                // Centre sprite on position
+                var x = this.position[0]-0.5*this.gridw;
+                var y = this.position[1]-0.5*this.gridh;
+                image(this.assets.sprite(this.sprite), x, y, this.imw, this.imh);
+            }
         }
 
         Map = class {
@@ -425,6 +632,7 @@ class DayX extends Day {
                 this.grid = [];
                 this.spriteCounter = {}
                 this.roadCount = 0;
+                this.structureCount = 0;
                 this.maxRoadFraction = 0.2;
                 this.roadRollChance = 1.0;
                 this.roadRollDecay = 0.3;
@@ -436,6 +644,8 @@ class DayX extends Day {
                 this.fullMap = false;
                 this.noRoads = true;
                 this.treeFraction = 0.05+Math.random() * 0.2;
+                // Used to search for random structures easily
+                this.structurePositions = []
                 // Make map
                 for (var ix = 0; ix < this.nx; ix++) { 
                     this.grid[ix] = [];
@@ -453,7 +663,7 @@ class DayX extends Day {
                 }
             }
     
-            draw() {
+            drawGround() {
                 var spriteID;
                 var x, y, imw, imh;
                 for (var ix = 0; ix < this.nx; ix++) { 
@@ -465,8 +675,27 @@ class DayX extends Day {
                         y = imh*iy;
                         // Draw an empty snowfield if either empty or structure
                         if (spriteID >= 0) image(this.assets.sprite(0), x, y, imw, imh);
-                        // Draw snow behind sprites
-                        if (spriteID != 0) {
+                        // Draw road
+                        if (spriteID < 0) {
+                            image(this.assets.sprite(spriteID), x, y, imw, imh);
+                        }
+
+                    }
+                }
+            }
+
+            drawStructures() {
+                var spriteID;
+                var x, y, imw, imh;
+                for (var ix = 0; ix < this.nx; ix++) { 
+                    for (var iy = 0; iy < this.ny; iy++) {
+                        spriteID = this.grid[ix][iy];
+                        imw = width/this.nx;
+                        imh = height/this.ny;
+                        x = imw*ix;
+                        y = imh*iy;
+                        // Draw any structures
+                        if (spriteID > 0) {
                             image(this.assets.sprite(spriteID), x, y, imw, imh);
                         }
 
@@ -521,7 +750,9 @@ class DayX extends Day {
                     // Place structure
                     else {
                         // Cycle if no roads within 4 cells
-                        if (this.distanceToRoad(ix,iy) > 4) continue;
+                        // distanceToRoad also returns the position of the nearest road
+                        // but we don't need that here
+                        if (this.distanceToRoad(ix,iy)[0] > 4) continue;
                         placedSomething = this.placeStructure(ix, iy);
                     }
                     // Prevent bad loops, just exit if this happens
@@ -647,14 +878,36 @@ class DayX extends Day {
                     return false;
                 }
                 // Add sprite
-                this.spriteCounter[structure] += 1
+                this.spriteCounter[structure] += 1;
+                this.structureCount += 1;
                 this.grid[pix][piy] = structure;
+                this.structurePositions.push([pix,piy]);
                 // Now make it more likely to make a road
                 this.roadRollChance *= this.roadRollIncrease;
                 this.roadRollChance = Math.min(1.0,this.roadRollChance);
                 // Add city population
-                this.city.population += int(Math.random()*4)+1
+                this.city.population += int(Math.random()*4)+1;
                 return true;
+
+            }
+
+            randomStructure(notThisOne=null) {
+                // Error state if no structures
+                if (this.structureCount == 0) {
+                    return [-1,-1]; 
+                }
+                // Return a random structure
+                var choice = this.assets.randomChoice(this.structurePositions);
+                if (!notThisOne) {
+                    return choice;
+                } else {
+                    // Make sure the choice isn't notThisOne
+                    // Used to make sure a destination isn't the current position
+                    while (choice == notThisOne) {
+                        choice = this.assets.randomChoice(this.structurePositions);
+                    }
+                }
+                return choice;
 
             }
 
@@ -687,39 +940,133 @@ class DayX extends Day {
                 var distance = 10000;
                 // Use NYC distance (dx + dy)
                 var b = this.border;
+                var closestRoad = null;
+                var newdist = 0;
                 for (var ix = b; ix < this.nx-b; ix++) { 
                     for (var iy = b; iy < this.ny-b; iy++) {
                         if (this.isRoad(ix,iy)) {
-                            distance = Math.min(Math.abs(pix-ix)+Math.abs(piy-iy),distance);
+                            newdist = Math.abs(pix-ix)+Math.abs(piy-iy)
+                            if (newdist < distance) {
+                                distance = newdist;
+                                closestRoad = [ix,iy]
+                            }
                         }
                     }
                 }
-                return distance;
+                return [distance,closestRoad];
             }
 
             distanceToStructure(pix, piy, spriteID) {
                 var distance = 10000;
-                // Use NYC distance (dx + dy)
                 var b = this.border;
                 for (var ix = b; ix < this.nx-b; ix++) { 
                     for (var iy = b; iy < this.ny-b; iy++) {
                         if (this.grid[ix][iy] == spriteID) {
+                            // SHOULD DO THE SAME AS BELOW, KEPT TO AVOID TOO MUCH INDIRECTION
                             distance = Math.min(Math.abs(pix-ix)+Math.abs(piy-iy),distance);
                         }
                     }
                 }
                 return distance;
             }
+
+            distanceBetween(pointA,pointB) {
+                // Calculate NYC distance (dx + dy)
+                return Math.abs(pointA[0]-pointB[0])+Math.abs(pointA[1]-pointB[1])
+            }
+
+            isSamePoint(pointA,pointB) {
+                // Calculate NYC distance (dx + dy)
+                return (pointA[0] == pointB[0]) && (pointA[1] == pointB[1])
+            }
+
+            findNodesInRoads(start,end) {
+                // Find nodes in roads in Cartesian axes
+                var startx = start[0];
+                var starty = start[1];
+                var nodes = []
+                var crossroad = this.assets.crossroad;
+
+                // Search x axis
+                var b = this.border;
+                for (var ix = b; ix < this.nx-b; ix++) { 
+                    // Just go to end
+                    if (end[0] == ix && end[1] == starty) {
+                        nodes = [end];
+                        return nodes;
+                    }
+                    // Find all nodes in the row
+                    if (this.grid[ix][starty] == crossroad) {
+                        nodes.push([ix,starty]);
+                    }
+                }
+                // Search y axis
+                for (var iy = b; iy < this.ny-b; iy++) {
+                    // Just go to end
+                    if (end[0] == startx && end[1] == iy) {
+                        nodes = [end];
+                        return nodes;
+                    }
+                    // Find all nodes in the column
+                    if (this.grid[startx][iy] == crossroad) {
+                        nodes.push([startx,iy]);
+                    }
+                }
+                return nodes;
+
+            }
+
+            copyPath(path) {
+                var newpath = []
+                for (var i = 0; i < path.length; i++) {
+                    newpath.push(path[i]);
+                }
+                return newpath;
+            }
+                
+            roadPathSearch(start,end) {
+                // Loop over paths
+                var path = null;
+                var nodes = null;
+                var paths = [[start]];
+                var newpath = null;
+                var newpaths = [];
+                var MAXRECURSIONS = 100;
+                for (var irecursion = 0; irecursion < MAXRECURSIONS; irecursion++) {
+                    for (var ip = 0; ip < paths.length; ip++) { 
+                        path = paths[ip];
+                        // Check if we're done already
+                        if (this.isSamePoint(path.at(-1),end)) {
+                            return path;
+                        }
+                        // Fill in new nodes to make new paths
+                        nodes = this.findNodesInRoads(path[path.length-1],end);
+                        for (var i = 0; i < nodes.length; i++) { 
+                            // Don't make backtracking paths
+                            if (!path.includes(nodes[i])) {
+                                newpath = this.copyPath(path);
+                                newpath.push(nodes[i]);
+                                // Check if we're done
+                                if (this.isSamePoint(newpath.at(-1),end)) {
+                                    return newpath;
+                                }
+                                newpaths.push(newpath) 
+                            }
+                        }
+
+                    }
+                    // Set up next recursion
+                    paths = newpaths;
+                }
+                // If we reach here, the recursions have failed to find a path
+                console.log("Failed to find path in roadPathSearch");
+                return false;
+            }
         }
 
     }
 
-    // Below is the basic setup for a nested class. This can be deleted or renamed
 
-    HelperClass = class {
-
-        constructor() {
-
-        }
-    }
 }
+
+
