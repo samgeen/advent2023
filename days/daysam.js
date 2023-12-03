@@ -339,7 +339,8 @@ class DayX extends Day {
                     "Yay, Mayor, Yay! - all the citizens :)",
                     "Sicko's realases the crince pie - it's a croissant with a mince pie in it",
                     "Citizens report increasing levels of toasty warmness - Mayoral commission launched",
-                    "Scientists discover anticocoa - it's a large marshmallow with a hot chocolate nucleus"];
+                    "Scientists discover anticocoa - it's a large marshmallow with a hot chocolate nucleus",
+                    "BUY DOGFORCE"];
         var firstNames = ["Councillor","Councillor","Councillor",
                       "Bork","Krampus","Hehe","Gronulsluk","Hilde","Wimpsifer","Harnald","Golb","Tilbert",
                       "Yarnis","Pilgou","Tripp","Horkhork","Wisper","Tramine","Colbit","Dilken"];
