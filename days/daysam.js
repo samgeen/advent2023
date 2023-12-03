@@ -7,6 +7,7 @@ function dayXPreload() {
     console.log("Loaded DayX");
 }
 
+// -------------------------------------------------------------------------------
 class DaySamAssets {
     constructor() {
         this.font = loadFont(this.assetFilename("Assiduous-9m35.ttf"));
@@ -63,6 +64,14 @@ class DaySamAssets {
         sprites[2003] = loadImage(this.imageFilename('mob4.png'));
         sprites[2004] = loadImage(this.imageFilename('mob5.png'));
 
+        // Alien robot
+        this.alien = 3000;
+        this.teleport = 3001;
+        this.present = 3002;
+        sprites[this.alien] = loadImage(this.imageFilename('alienrobot.png'));
+        sprites[this.teleport] = loadImage(this.imageFilename('teleport.png'));
+        sprites[this.present] = loadImage(this.imageFilename('present.png'));
+
         this.sprites = sprites;
 
     }
@@ -95,6 +104,7 @@ class DaySamAssets {
 
 }
 
+// -------------------------------------------------------------------------------
 class DayX extends Day {
 
     constructor () {
@@ -118,6 +128,8 @@ class DayX extends Day {
         this.tickerLifetime = this.maxTickerLifetime;
         this.mobDelay = 3000;
         this.nextMobDelay = 3000;
+        this.alienDelay = 0;
+        this.nextAlienDelay = 5*60*1000;
         this.tickerText = "";
         this.city = 0;
         this.loading = false;
@@ -206,30 +218,50 @@ class DayX extends Day {
             this.loadingUpdates();
         }
         else {
+            // This should be a delay class or something huh!
+            // I am become what I hate
+            // No I won't refactor this
+            // I know
             var minAIDelay = 2000;
             var maxAIDelay = 8000;
             var minTickerDelay = 7000;
             var maxTickerDelay = 10000;
             var minMobDelay = 2000;
             var maxMobDelay = 8000;
+            var minAlienDelay = 5*60*1000;
+            var maxAlienDelay = 10*60*1000;
             this.aiDelay += deltaTime;
             this.tickerDelay += deltaTime;
             this.mobDelay += deltaTime;
+            this.alienDelay += deltaTime;
+            // AI event timer
             if (this.aiDelay > this.nextAIDelay) {
                 this.city.stepAI();
                 this.aiDelay = 0;
                 this.nextAIDelay = (maxAIDelay-minAIDelay)*Math.random()+minAIDelay;
             }
+            // Ticker spawn timer
             if (this.tickerDelay > this.nextTickerDelay) {
                 this.generateTickerText();
                 this.tickerDelay = 0;
                 this.tickerLifetime = this.maxTickerLifetime;
                 this.nextTickerDelay = (maxTickerDelay-minTickerDelay)*Math.random()+minTickerDelay;
             }
+            // Mob spawn timer
             if (this.mobDelay > this.nextMobDelay) {
                 this.city.spawnMob();
                 this.mobDelay = 0;
                 this.nextMobDelay = (maxMobDelay-minMobDelay)*Math.random()+minMobDelay;
+            }
+            // Set delay to a second if testing
+            if (this.DEBUG) {
+                this.nextAlienDelay = 1000;
+            }
+            // Alien robot spawn timer
+            if (this.alienDelay > this.nextAlienDelay) {
+                this.city.spawnAlien();
+                this.alienDelay = 0;
+                this.nextAlienDelay = (maxAlienDelay-minAlienDelay)*Math.random()+minAlienDelay;
             }
             // Handle mobs
             this.city.moveMobs();
@@ -304,7 +336,10 @@ class DayX extends Day {
                     "Local snowperson committee calls for tax freeze",
                     "Boo, Mayor, Boo! - some citizens, probably",
                     "76% of citizens say 'Ho ho ho' - Mayor's office unavailable for comment",
-                    "Yay, Mayor, Yay! - all the citizens :)"];
+                    "Yay, Mayor, Yay! - all the citizens :)",
+                    "Sicko's realases the crince pie - it's a croissant with a mince pie in it",
+                    "Citizens report increasing levels of toasty warmness - Mayoral commission launched",
+                    "Scientists discover anticocoa - it's a large marshmallow with a hot chocolate nucleus"];
         var firstNames = ["Councillor","Councillor","Councillor",
                       "Bork","Krampus","Hehe","Gronulsluk","Hilde","Wimpsifer","Harnald","Golb","Tilbert",
                       "Yarnis","Pilgou","Tripp","Horkhork","Wisper","Tramine","Colbit","Dilken"];
@@ -342,7 +377,9 @@ class DayX extends Day {
                                 "Oh so you fireproof the big goat? Huh? You fireproof the big goat?? Well good for you.",
                                 "Real candles on the tree or get out. No compromise.",
                                 "Aww, your dog is adorable! Can I pet them?",
-                                "Hey I found the winter dragon and its egg is hatching, what's the number for the vet?"];
+                                "Hey I found the winter dragon and its egg is hatching, what's the number for the vet?",
+                                "I'm making Mystery Surprise for dinner - can you pick up the ingredients on the way home?",
+                                "Wetty's sells the most delicious candles - you have to try one!"];
         var text = ""
         if (choice < 0.5) {
             text = "Newsflash: "
@@ -426,6 +463,7 @@ class DayX extends Day {
         // No behaviour
     }
 
+    // -------------------------------------------------------------------------------
     City = class {
 
         constructor(day) {
@@ -435,6 +473,7 @@ class DayX extends Day {
             this.mobs = []
             this.maxMobCount = 20;
             this.name = this.makeName()
+            this.alienRobot = null;
             this.population = 0
         }
 
@@ -462,6 +501,9 @@ class DayX extends Day {
                 this.mobs[i].draw();
             }
             this.map.drawStructures();
+            if (this.alienRobot) {
+                this.alienRobot.draw();
+            }
         }
 
         stepAI() {
@@ -482,6 +524,43 @@ class DayX extends Day {
             this.mobs.push(mob);
         }
 
+        spawnAlien() {
+            var target = [0,0];
+            var targetOK = false;
+            var badloop = 0;
+            // Do we already have an alien?
+            if (this.alienRobot) {
+                return;
+            }
+            // Do we have enough structures?
+            if (this.map.structureCount < 1)  {
+                console.log("Tried to spawn an alien robot but not enough structures onscreen");
+                return;
+            }
+            // Cycle to ensure that chosen structure makes alien robot onscreen
+            while (!targetOK) {
+                // If we can't identify a structure in a good position, return
+                badloop += 1
+                if (badloop > 1000) {
+                    console.log("Tried to spawn an alien robot but couldn't find structure in a good place");
+                    return;
+                }
+                target = this.map.randomStructure();
+                let isAlreadyPresent = this.map.grid[target[0]][target[1]] == this.assets.present;
+                // Check target
+                if ((target[1] >= 4) && (!isAlreadyPresent)) {
+                    targetOK = true;
+                }
+            }
+            console.log("Spawning alien robot");
+            this.alienRobot = new this.AlienRobot(this,target);
+        }
+
+        despawnAlien() {
+            console.log("Despawning alien robot");
+            this.alienRobot = null;
+        }
+
         despawnMob(mob) {
             const index = this.mobs.indexOf(mob);
             if (index > -1) {
@@ -493,8 +572,12 @@ class DayX extends Day {
             for (var i = 0; i < this.mobs.length; i++) { 
                 this.mobs[i].move();
             }
+            if (this.alienRobot) {
+                this.alienRobot.move()
+            }
         }
 
+        // -------------------------------------------------------------------------------
         Mob = class {
             constructor(city) {
                 this.city = city;
@@ -581,11 +664,6 @@ class DayX extends Day {
 
             move() {
                 // Move the mob along a path
-                // Relevant parameters
-                // this.waypoints
-                // this.waypoint
-                // this.waypointProgress
-                // this.speed
                 var currposwp = this.waypoints[this.waypoint];
                 var nextposwp = this.waypoints[this.waypoint+1];
                 // Need to recalculate the path length to the next waypoint?
@@ -629,6 +707,63 @@ class DayX extends Day {
             }
         }
 
+        // -------------------------------------------------------------------------------
+        AlienRobot = class {
+            constructor(city, target) {
+                this.city = city;
+                this.map = city.map;
+                this.day = city.day;
+                this.assets = city.assets;
+                this.target = target;
+                this.gridw = this.map.gridw;
+                this.gridh = this.map.gridh;
+                // Put teleporter above the target
+                this.teleportPosition = [this.target[0],this.target[1]-1];
+                // Put self above that
+                // Self is 2x the size of a regular grid cell, and we need to centre it
+                this.position = [this.target[0]-0.5,this.target[1]-3];
+                this.floating = [0.0,0.0]
+                this.teleportOn = false;
+                this.age = 0;
+                this.maxAge = 10000;
+            }
+
+            move() {
+                // Check maximum age
+                this.age += deltaTime;
+                if (this.age > 0.9*this.maxAge) {
+                    // Set alien target to present
+                    this.map.grid[this.target[0]][this.target[1]] = this.assets.present;
+                }
+                if (this.age > this.maxAge) {
+                    this.city.despawnAlien();
+                }
+                // Artificial low frame rate
+                var frameTime = 200; // 200 ms = 0.2 s
+                // Set floating offset
+                this.floating[1] = 0.05*Math.sin(0.001*frameTime*int(this.age/frameTime));
+                // Set teleporter Flicker
+                this.teleportOn = (this.age % (2*frameTime) > frameTime);
+            }
+
+            draw() {
+                // Alien
+                image(this.assets.sprite(this.assets.alien), 
+                    (this.position[0]+this.floating[0])*this.gridw, 
+                    (this.position[1]+this.floating[1])*this.gridh, 
+                    2*this.gridw, 2*this.gridh);
+                // Teleporter
+                if (this.teleportOn) {
+                    image(this.assets.sprite(this.assets.teleport), 
+                        this.teleportPosition[0]*this.gridw, 
+                        this.teleportPosition[1]*this.gridh, 
+                        this.gridw, this.gridh);
+                }
+                
+            }
+        }
+
+        // -------------------------------------------------------------------------------
         Map = class {
             constructor(city) {
                 this.city = city;
@@ -654,7 +789,9 @@ class DayX extends Day {
                 this.noRoads = true;
                 this.treeFraction = 0.05+Math.random() * 0.2;
                 // Used to search for random structures easily
-                this.structurePositions = []
+                this.structurePositions = [];
+                this.gridw = width/this.nx;
+                this.gridh = height/this.ny;
                 // Make map
                 for (var ix = 0; ix < this.nx; ix++) { 
                     this.grid[ix] = [];
@@ -674,12 +811,12 @@ class DayX extends Day {
     
             drawGround() {
                 var spriteID;
-                var x, y, imw, imh;
+                var x, y;
+                var imw = this.gridw;
+                var imh = this.gridh;
                 for (var ix = 0; ix < this.nx; ix++) { 
                     for (var iy = 0; iy < this.ny; iy++) {
                         spriteID = this.grid[ix][iy];
-                        imw = width/this.nx;
-                        imh = height/this.ny;
                         x = imw*ix;
                         y = imh*iy;
                         // Draw an empty snowfield if either empty or structure
@@ -695,12 +832,12 @@ class DayX extends Day {
 
             drawStructures() {
                 var spriteID;
-                var x, y, imw, imh;
+                var x, y;
+                var imw = this.gridw;
+                var imh = this.gridh;
                 for (var ix = 0; ix < this.nx; ix++) { 
                     for (var iy = 0; iy < this.ny; iy++) {
                         spriteID = this.grid[ix][iy];
-                        imw = width/this.nx;
-                        imh = height/this.ny;
                         x = imw*ix;
                         y = imh*iy;
                         // Draw any structures
